@@ -3,6 +3,12 @@ const MAP_WIDTH = 60,
 const CELL_WIDTH = 14,
   CELL_HEIGHT = 20;
 const HUD_HEIGHT = 90;
+const MAX_ROOMS = 9,
+  ROOM_PLACEMENT_TRIES = 60;
+const ROOM_MIN_WIDTH = 5,
+  ROOM_MAX_WIDTH = 12;
+const ROOM_MIN_HEIGHT = 4,
+  ROOM_MAX_HEIGHT = 7;
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -11,14 +17,55 @@ canvas.height = MAP_HEIGHT * CELL_HEIGHT;
 
 let map, player;
 
+const rand = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+
+function carve(x1, y1, x2, y2) {
+  for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++)
+    for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) map[y][x] = ".";
+}
+
 function genLevel() {
-  map = Array.from({ length: MAP_HEIGHT }, (_, y) =>
-    Array.from({ length: MAP_WIDTH }, (_, x) =>
-      x === 0 || y === 0 || x === MAP_WIDTH - 1 || y === MAP_HEIGHT - 1
-        ? "#"
-        : ".",
-    ),
-  );
+  map = Array.from({ length: MAP_HEIGHT }, () => Array(MAP_WIDTH).fill("#"));
+  const rooms = [];
+
+  for (
+    let tries = 0;
+    tries < ROOM_PLACEMENT_TRIES && rooms.length < MAX_ROOMS;
+    tries++
+  ) {
+    const width = rand(ROOM_MIN_WIDTH, ROOM_MAX_WIDTH),
+      height = rand(ROOM_MIN_HEIGHT, ROOM_MAX_HEIGHT);
+    const x = rand(1, MAP_WIDTH - width - 2),
+      y = rand(1, MAP_HEIGHT - height - 2);
+    const overlaps = rooms.some(
+      (other) =>
+        x - 1 <= other.x + other.width &&
+        x + width + 1 >= other.x &&
+        y - 1 <= other.y + other.height &&
+        y + height + 1 >= other.y,
+    );
+    if (overlaps) continue;
+
+    const room = {
+      x,
+      y,
+      width,
+      height,
+      centerX: x + (width >> 1),
+      centerY: y + (height >> 1),
+    };
+    carve(x, y, x + width - 1, y + height - 1);
+
+    const prev = rooms[rooms.length - 1];
+    if (prev) {
+      carve(prev.centerX, prev.centerY, room.centerX, prev.centerY);
+      carve(room.centerX, prev.centerY, room.centerX, room.centerY);
+    }
+    rooms.push(room);
+  }
+
+  player.x = rooms[0].centerX;
+  player.y = rooms[0].centerY;
 }
 
 const isWall = (x, y) => map[y]?.[x] !== ".";
