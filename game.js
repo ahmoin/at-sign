@@ -9,15 +9,20 @@ const ROOM_MIN_WIDTH = 5,
   ROOM_MAX_WIDTH = 12;
 const ROOM_MIN_HEIGHT = 4,
   ROOM_MAX_HEIGHT = 7;
+const MAX_MESSAGES = 3;
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 canvas.width = MAP_WIDTH * CELL_WIDTH;
-canvas.height = MAP_HEIGHT * CELL_HEIGHT;
+canvas.height = MAP_HEIGHT * CELL_HEIGHT + HUD_HEIGHT;
 
-let map, player;
+let map, player, stairs, depth, messages;
 
 const rand = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+const log = (msg) => {
+  messages.push(msg);
+  if (messages.length > MAX_MESSAGES) messages.shift();
+};
 
 function carve(x1, y1, x2, y2) {
   for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++)
@@ -66,6 +71,8 @@ function genLevel() {
 
   player.x = rooms[0].centerX;
   player.y = rooms[0].centerY;
+  const last = rooms[rooms.length - 1];
+  stairs = { x: last.centerX, y: last.centerY };
 }
 
 const isWall = (x, y) => map[y]?.[x] !== ".";
@@ -76,6 +83,11 @@ function playerMove(dx, dy) {
   if (isWall(nx, ny)) return;
   player.x = nx;
   player.y = ny;
+  if (nx === stairs.x && ny === stairs.y) {
+    depth++;
+    log(`You descend to depth ${depth}.`);
+    genLevel();
+  }
 }
 
 function drawChar(char, x, y, color) {
@@ -98,7 +110,18 @@ function draw() {
     for (let x = 0; x < MAP_WIDTH; x++)
       drawChar(map[y][x], x, y, map[y][x] === "#" ? "#555" : "#2a2a2a");
 
+  drawChar(">", stairs.x, stairs.y, "#ff0");
   drawChar("@", player.x, player.y, "#fff");
+
+  ctx.textAlign = "left";
+  ctx.font = "16px monospace";
+  ctx.fillStyle = "#fff";
+  const top = MAP_HEIGHT * CELL_HEIGHT + 18;
+  ctx.fillText(`Depth ${depth}`, 10, top);
+  ctx.fillStyle = "#aaa";
+  messages.forEach((message, line) =>
+    ctx.fillText(message, 10, top + 22 * (line + 1)),
+  );
 }
 
 const KEYS = {
@@ -120,5 +143,8 @@ addEventListener("keydown", (event) => {
 });
 
 player = { x: MAP_WIDTH >> 1, y: MAP_HEIGHT >> 1 };
+depth = 1;
+messages = [];
 genLevel();
+log("Find the > to go deeper.");
 draw();
