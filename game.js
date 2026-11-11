@@ -12,6 +12,8 @@ const ROOM_MIN_HEIGHT = 4,
 const MAX_MESSAGES = 3;
 const MONSTER_SIGHT = 9;
 const STAIRS_HEAL = 5;
+const POTION_HEAL = 8,
+  POTION_CHANCE = 0.4;
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -24,7 +26,7 @@ const MONSTERS = [
   { char: "O", name: "orc", hp: 10, atk: 3, color: "#c55", minDepth: 3 },
 ];
 
-let map, player, monsters, stairs, depth, messages, dead;
+let map, player, monsters, potions, stairs, depth, messages, dead;
 
 const rand = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
 const log = (msg) => {
@@ -40,6 +42,7 @@ function carve(x1, y1, x2, y2) {
 function genLevel() {
   map = Array.from({ length: MAP_HEIGHT }, () => Array(MAP_WIDTH).fill("#"));
   monsters = [];
+  potions = [];
   const rooms = [];
 
   for (
@@ -93,12 +96,20 @@ function genLevel() {
       if (!monsterAt(x, y) && !(x === stairs.x && y === stairs.y))
         monsters.push({ ...type, x, y, maxHp: type.hp });
     }
+
+    if (Math.random() < POTION_CHANCE) {
+      const x = rand(room.x, room.x + room.width - 1),
+        y = rand(room.y, room.y + room.height - 1);
+      if (!(x === stairs.x && y === stairs.y)) potions.push({ x, y });
+    }
   }
 }
 
 const isWall = (x, y) => map[y]?.[x] !== ".";
 const monsterAt = (x, y) =>
   monsters.find((monster) => monster.x === x && monster.y === y);
+const potionAt = (x, y) =>
+  potions.find((potion) => potion.x === x && potion.y === y);
 
 function attack(attacker, target) {
   const dmg = rand(1, attacker.atk);
@@ -123,6 +134,13 @@ function playerMove(dx, dy) {
   } else if (!isWall(nx, ny)) {
     player.x = nx;
     player.y = ny;
+    const potion = potionAt(nx, ny);
+    if (potion) {
+      const healed = Math.min(POTION_HEAL, player.maxHp - player.hp);
+      player.hp += healed;
+      potions = potions.filter((other) => other !== potion);
+      log(`You drink a potion and heal ${healed}.`);
+    }
     if (nx === stairs.x && ny === stairs.y) {
       depth++;
       player.hp = Math.min(player.maxHp, player.hp + STAIRS_HEAL);
@@ -200,6 +218,7 @@ function draw() {
       drawChar(map[y][x], x, y, map[y][x] === "#" ? "#555" : "#2a2a2a");
 
   drawChar(">", stairs.x, stairs.y, "#ff0");
+  for (const potion of potions) drawChar("!", potion.x, potion.y, "#e5e");
   for (const monster of monsters)
     drawChar(monster.char, monster.x, monster.y, monster.color);
   drawChar("@", player.x, player.y, dead ? "#800" : "#fff");
@@ -246,7 +265,7 @@ function newGame() {
   messages = [];
   dead = false;
   genLevel();
-  log("Find the > to go deeper. Bump monsters to attack.");
+  log("Find the > to go deeper. Bump monsters to attack. Drink ! to heal.");
   draw();
 }
 
