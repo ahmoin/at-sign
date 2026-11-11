@@ -11,6 +11,7 @@ const ROOM_MIN_HEIGHT = 4,
   ROOM_MAX_HEIGHT = 7;
 const MAX_MESSAGES = 3;
 const MONSTER_SIGHT = 9;
+const STAIRS_HEAL = 5;
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -23,7 +24,7 @@ const MONSTERS = [
   { char: "O", name: "orc", hp: 10, atk: 3, color: "#c55", minDepth: 3 },
 ];
 
-let map, player, monsters, stairs, depth, messages;
+let map, player, monsters, stairs, depth, messages, dead;
 
 const rand = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
 const log = (msg) => {
@@ -106,6 +107,7 @@ function attack(attacker, target) {
 }
 
 function playerMove(dx, dy) {
+  if (dead) return;
   const nx = player.x + dx,
     ny = player.y + dy;
   const target = monsterAt(nx, ny);
@@ -123,6 +125,7 @@ function playerMove(dx, dy) {
     player.y = ny;
     if (nx === stairs.x && ny === stairs.y) {
       depth++;
+      player.hp = Math.min(player.maxHp, player.hp + STAIRS_HEAL);
       log(`You descend to depth ${depth}.`);
       genLevel();
       return;
@@ -138,30 +141,39 @@ function monstersTurn() {
     const dx = player.x - monster.x,
       dy = player.y - monster.y;
     const dist = Math.abs(dx) + Math.abs(dy);
-    if (dist <= 1 || dist >= MONSTER_SIGHT) continue;
 
-    const steps =
-      Math.abs(dx) > Math.abs(dy)
-        ? [
-            [Math.sign(dx), 0],
-            [0, Math.sign(dy)],
-          ]
-        : [
-            [0, Math.sign(dy)],
-            [Math.sign(dx), 0],
-          ];
-    for (const [sx, sy] of steps) {
-      const nx = monster.x + sx,
-        ny = monster.y + sy;
-      if (
-        (sx || sy) &&
-        !isWall(nx, ny) &&
-        !monsterAt(nx, ny) &&
-        !(nx === player.x && ny === player.y)
-      ) {
-        monster.x = nx;
-        monster.y = ny;
-        break;
+    if (dist === 1) {
+      const dmg = attack(monster, player);
+      log(`The ${monster.name} hits you for ${dmg}.`);
+      if (player.hp <= 0) {
+        dead = true;
+        log(`You died on depth ${depth}. Press R to try again.`);
+        return;
+      }
+    } else if (dist < MONSTER_SIGHT) {
+      const steps =
+        Math.abs(dx) > Math.abs(dy)
+          ? [
+              [Math.sign(dx), 0],
+              [0, Math.sign(dy)],
+            ]
+          : [
+              [0, Math.sign(dy)],
+              [Math.sign(dx), 0],
+            ];
+      for (const [sx, sy] of steps) {
+        const nx = monster.x + sx,
+          ny = monster.y + sy;
+        if (
+          (sx || sy) &&
+          !isWall(nx, ny) &&
+          !monsterAt(nx, ny) &&
+          !(nx === player.x && ny === player.y)
+        ) {
+          monster.x = nx;
+          monster.y = ny;
+          break;
+        }
       }
     }
   }
@@ -190,13 +202,17 @@ function draw() {
   drawChar(">", stairs.x, stairs.y, "#ff0");
   for (const monster of monsters)
     drawChar(monster.char, monster.x, monster.y, monster.color);
-  drawChar("@", player.x, player.y, "#fff");
+  drawChar("@", player.x, player.y, dead ? "#800" : "#fff");
 
   ctx.textAlign = "left";
   ctx.font = "16px monospace";
   ctx.fillStyle = "#fff";
   const top = MAP_HEIGHT * CELL_HEIGHT + 18;
-  ctx.fillText(`Depth ${depth}   Kills ${player.kills}`, 10, top);
+  ctx.fillText(
+    `HP ${Math.max(0, player.hp)}/${player.maxHp}   Depth ${depth}   Kills ${player.kills}`,
+    10,
+    top,
+  );
   ctx.fillStyle = "#aaa";
   messages.forEach((message, line) =>
     ctx.fillText(message, 10, top + 22 * (line + 1)),
@@ -215,15 +231,23 @@ const KEYS = {
 };
 
 addEventListener("keydown", (event) => {
-  if (!KEYS[event.code]) return;
-  event.preventDefault();
-  playerMove(...KEYS[event.code]);
+  if (KEYS[event.code]) {
+    event.preventDefault();
+    playerMove(...KEYS[event.code]);
+  } else if (event.code === "KeyR" && dead) {
+    newGame();
+  }
   draw();
 });
 
-player = { x: 0, y: 0, atk: 4, kills: 0 };
-depth = 1;
-messages = [];
-genLevel();
-log("Find the > to go deeper.");
-draw();
+function newGame() {
+  player = { x: 0, y: 0, hp: 20, maxHp: 20, atk: 4, kills: 0 };
+  depth = 1;
+  messages = [];
+  dead = false;
+  genLevel();
+  log("Find the > to go deeper. Bump monsters to attack.");
+  draw();
+}
+
+newGame();
