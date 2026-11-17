@@ -14,6 +14,7 @@ const MONSTER_SIGHT = 9;
 const STAIRS_HEAL = 5;
 const POTION_HEAL = 8,
   POTION_CHANCE = 0.4;
+const VIEW_RADIUS = 7;
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -26,7 +27,7 @@ const MONSTERS = [
   { char: "O", name: "orc", hp: 10, atk: 3, color: "#c55", minDepth: 3 },
 ];
 
-let map, player, monsters, potions, stairs, depth, messages, dead;
+let map, seen, player, monsters, potions, stairs, depth, messages, dead;
 
 const rand = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
 const log = (msg) => {
@@ -41,6 +42,7 @@ function carve(x1, y1, x2, y2) {
 
 function genLevel() {
   map = Array.from({ length: MAP_HEIGHT }, () => Array(MAP_WIDTH).fill("#"));
+  seen = Array.from({ length: MAP_HEIGHT }, () => Array(MAP_WIDTH).fill(false));
   monsters = [];
   potions = [];
   const rooms = [];
@@ -197,6 +199,48 @@ function monstersTurn() {
   }
 }
 
+function hasLineOfSight(fromX, fromY, toX, toY) {
+  const dx = Math.abs(toX - fromX),
+    dy = -Math.abs(toY - fromY);
+  const sx = fromX < toX ? 1 : -1,
+    sy = fromY < toY ? 1 : -1;
+  let error = dx + dy,
+    x = fromX,
+    y = fromY;
+  while (true) {
+    if (x === toX && y === toY) return true;
+    if ((x !== fromX || y !== fromY) && isWall(x, y)) return false;
+    const doubledError = 2 * error;
+    if (doubledError >= dy) {
+      error += dy;
+      x += sx;
+    }
+    if (doubledError <= dx) {
+      error += dx;
+      y += sy;
+    }
+  }
+}
+
+function computeVisible() {
+  const visible = Array.from({ length: MAP_HEIGHT }, () =>
+    Array(MAP_WIDTH).fill(false),
+  );
+  for (let y = player.y - VIEW_RADIUS; y <= player.y + VIEW_RADIUS; y++)
+    for (let x = player.x - VIEW_RADIUS; x <= player.x + VIEW_RADIUS; x++) {
+      if (x < 0 || y < 0 || x >= MAP_WIDTH || y >= MAP_HEIGHT) continue;
+      const distSquared = (x - player.x) ** 2 + (y - player.y) ** 2;
+      if (
+        distSquared <= VIEW_RADIUS ** 2 &&
+        hasLineOfSight(player.x, player.y, x, y)
+      ) {
+        visible[y][x] = true;
+        seen[y][x] = true;
+      }
+    }
+  return visible;
+}
+
 function drawChar(char, x, y, color) {
   ctx.fillStyle = color;
   ctx.fillText(
@@ -213,14 +257,33 @@ function draw() {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
+  const visible = computeVisible();
   for (let y = 0; y < MAP_HEIGHT; y++)
-    for (let x = 0; x < MAP_WIDTH; x++)
-      drawChar(map[y][x], x, y, map[y][x] === "#" ? "#555" : "#2a2a2a");
+    for (let x = 0; x < MAP_WIDTH; x++) {
+      if (!seen[y][x]) continue;
+      const isWallTile = map[y][x] === "#";
+      const color = visible[y][x]
+        ? isWallTile
+          ? "#555"
+          : "#2a2a2a"
+        : isWallTile
+          ? "#2e2e2e"
+          : "#161616";
+      drawChar(map[y][x], x, y, color);
+    }
 
-  drawChar(">", stairs.x, stairs.y, "#ff0");
-  for (const potion of potions) drawChar("!", potion.x, potion.y, "#e5e");
+  if (seen[stairs.y][stairs.x])
+    drawChar(
+      ">",
+      stairs.x,
+      stairs.y,
+      visible[stairs.y][stairs.x] ? "#ff0" : "#770",
+    );
+  for (const potion of potions)
+    if (visible[potion.y][potion.x]) drawChar("!", potion.x, potion.y, "#e5e");
   for (const monster of monsters)
-    drawChar(monster.char, monster.x, monster.y, monster.color);
+    if (visible[monster.y][monster.x])
+      drawChar(monster.char, monster.x, monster.y, monster.color);
   drawChar("@", player.x, player.y, dead ? "#800" : "#fff");
 
   ctx.textAlign = "left";
