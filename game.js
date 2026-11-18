@@ -18,6 +18,7 @@ const VIEW_RADIUS = 7;
 const XP_PER_LEVEL = 5;
 const LEVEL_HP_GAIN = 5,
   LEVEL_ATK_GAIN = 1;
+const HP_BAR_WIDTH = 10;
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -46,7 +47,16 @@ const MONSTERS = [
   { char: "O", name: "orc", hp: 10, atk: 3, xp: 6, color: "#c55", minDepth: 3 },
 ];
 
-let map, seen, player, monsters, potions, stairs, depth, messages, dead;
+let map,
+  seen,
+  player,
+  monsters,
+  potions,
+  stairs,
+  depth,
+  messages,
+  dead,
+  lastHit;
 
 const rand = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
 const log = (msg) => {
@@ -64,6 +74,7 @@ function genLevel() {
   seen = Array.from({ length: MAP_HEIGHT }, () => Array(MAP_WIDTH).fill(false));
   monsters = [];
   potions = [];
+  lastHit = null;
   const rooms = [];
 
   for (
@@ -161,9 +172,11 @@ function playerMove(dx, dy) {
   if (target) {
     const dmg = attack(player, target);
     log(`You hit the ${target.name} for ${dmg}.`);
+    lastHit = target;
     if (target.hp <= 0) {
       log(`The ${target.name} dies.`);
       monsters = monsters.filter((other) => other !== target);
+      lastHit = null;
       player.kills++;
       gainXp(target.xp);
     }
@@ -284,6 +297,11 @@ function drawChar(char, x, y, color) {
   );
 }
 
+function hpBar(monster) {
+  const filled = Math.ceil((HP_BAR_WIDTH * monster.hp) / monster.maxHp);
+  return `[${"#".repeat(filled)}${"-".repeat(HP_BAR_WIDTH - filled)}]`;
+}
+
 function draw() {
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -324,11 +342,10 @@ function draw() {
   ctx.font = "16px monospace";
   ctx.fillStyle = "#fff";
   const top = MAP_HEIGHT * CELL_HEIGHT + 18;
-  ctx.fillText(
-    `HP ${Math.max(0, player.hp)}/${player.maxHp}   Lv ${player.level}   XP ${player.xp}/${xpToNextLevel()}   Depth ${depth}   Kills ${player.kills}`,
-    10,
-    top,
-  );
+  let status = `HP ${Math.max(0, player.hp)}/${player.maxHp}   Lv ${player.level}   XP ${player.xp}/${xpToNextLevel()}   Depth ${depth}   Kills ${player.kills}`;
+  if (lastHit && visible[lastHit.y][lastHit.x])
+    status += `   ${lastHit.name} ${hpBar(lastHit)}`;
+  ctx.fillText(status, 10, top);
   ctx.fillStyle = "#aaa";
   messages.forEach((message, line) =>
     ctx.fillText(message, 10, top + 22 * (line + 1)),
