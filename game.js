@@ -15,6 +15,9 @@ const STAIRS_HEAL = 5;
 const POTION_HEAL = 8,
   POTION_CHANCE = 0.4;
 const VIEW_RADIUS = 7;
+const XP_PER_LEVEL = 5;
+const LEVEL_HP_GAIN = 5,
+  LEVEL_ATK_GAIN = 1;
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -22,9 +25,25 @@ canvas.width = MAP_WIDTH * CELL_WIDTH;
 canvas.height = MAP_HEIGHT * CELL_HEIGHT + HUD_HEIGHT;
 
 const MONSTERS = [
-  { char: "r", name: "rat", hp: 3, atk: 1, color: "#b08860", minDepth: 1 },
-  { char: "g", name: "goblin", hp: 6, atk: 2, color: "#5c5", minDepth: 1 },
-  { char: "O", name: "orc", hp: 10, atk: 3, color: "#c55", minDepth: 3 },
+  {
+    char: "r",
+    name: "rat",
+    hp: 3,
+    atk: 1,
+    xp: 1,
+    color: "#b08860",
+    minDepth: 1,
+  },
+  {
+    char: "g",
+    name: "goblin",
+    hp: 6,
+    atk: 2,
+    xp: 3,
+    color: "#5c5",
+    minDepth: 1,
+  },
+  { char: "O", name: "orc", hp: 10, atk: 3, xp: 6, color: "#c55", minDepth: 3 },
 ];
 
 let map, seen, player, monsters, potions, stairs, depth, messages, dead;
@@ -119,6 +138,20 @@ function attack(attacker, target) {
   return dmg;
 }
 
+const xpToNextLevel = () => player.level * XP_PER_LEVEL;
+
+function gainXp(amount) {
+  player.xp += amount;
+  while (player.xp >= xpToNextLevel()) {
+    player.xp -= xpToNextLevel();
+    player.level++;
+    player.maxHp += LEVEL_HP_GAIN;
+    player.hp += LEVEL_HP_GAIN;
+    player.atk += LEVEL_ATK_GAIN;
+    log(`You reach level ${player.level}!`);
+  }
+}
+
 function playerMove(dx, dy) {
   if (dead) return;
   const nx = player.x + dx,
@@ -132,6 +165,7 @@ function playerMove(dx, dy) {
       log(`The ${target.name} dies.`);
       monsters = monsters.filter((other) => other !== target);
       player.kills++;
+      gainXp(target.xp);
     }
   } else if (!isWall(nx, ny)) {
     player.x = nx;
@@ -291,7 +325,7 @@ function draw() {
   ctx.fillStyle = "#fff";
   const top = MAP_HEIGHT * CELL_HEIGHT + 18;
   ctx.fillText(
-    `HP ${Math.max(0, player.hp)}/${player.maxHp}   Depth ${depth}   Kills ${player.kills}`,
+    `HP ${Math.max(0, player.hp)}/${player.maxHp}   Lv ${player.level}   XP ${player.xp}/${xpToNextLevel()}   Depth ${depth}   Kills ${player.kills}`,
     10,
     top,
   );
@@ -323,7 +357,7 @@ addEventListener("keydown", (event) => {
 });
 
 function newGame() {
-  player = { x: 0, y: 0, hp: 20, maxHp: 20, atk: 4, kills: 0 };
+  player = { x: 0, y: 0, hp: 20, maxHp: 20, atk: 4, kills: 0, level: 1, xp: 0 };
   depth = 1;
   messages = [];
   dead = false;
